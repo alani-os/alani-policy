@@ -53,6 +53,28 @@ pub enum ResourceKind {
 }
 
 impl ResourceKind {
+    /// Parses a stable resource-kind label.
+    pub const fn from_label(label: &str) -> Option<Self> {
+        match label.as_bytes() {
+            b"any" => Some(Self::Any),
+            b"task" => Some(Self::Task),
+            b"memory" => Some(Self::Memory),
+            b"device" => Some(Self::Device),
+            b"model" => Some(Self::Model),
+            b"audit_log" | b"audit" => Some(Self::AuditLog),
+            b"trace" => Some(Self::Trace),
+            b"policy" => Some(Self::Policy),
+            b"config" => Some(Self::Config),
+            b"storage" => Some(Self::Storage),
+            b"filesystem" => Some(Self::Filesystem),
+            b"network" => Some(Self::Network),
+            b"corpus" => Some(Self::Corpus),
+            b"package" => Some(Self::Package),
+            b"identity" => Some(Self::Identity),
+            _ => None,
+        }
+    }
+
     /// Stable resource label.
     pub const fn label(self) -> &'static str {
         match self {
@@ -134,6 +156,31 @@ pub enum OperationKind {
 }
 
 impl OperationKind {
+    /// Parses a stable operation label.
+    pub const fn from_label(label: &str) -> Option<Self> {
+        match label.as_bytes() {
+            b"any" => Some(Self::Any),
+            b"read" => Some(Self::Read),
+            b"write" => Some(Self::Write),
+            b"create" => Some(Self::Create),
+            b"delete" => Some(Self::Delete),
+            b"execute" => Some(Self::Execute),
+            b"admin" => Some(Self::Admin),
+            b"query" => Some(Self::Query),
+            b"open" => Some(Self::Open),
+            b"call" => Some(Self::Call),
+            b"infer" => Some(Self::Infer),
+            b"append" => Some(Self::Append),
+            b"verify" => Some(Self::Verify),
+            b"capability.derive" => Some(Self::DeriveCapability),
+            b"capability.revoke" => Some(Self::RevokeCapability),
+            b"export" => Some(Self::Export),
+            b"route" => Some(Self::Route),
+            b"mount" => Some(Self::Mount),
+            _ => None,
+        }
+    }
+
     /// Stable operation label.
     pub const fn label(self) -> &'static str {
         match self {
@@ -268,6 +315,17 @@ pub enum PolicyEffect {
 }
 
 impl PolicyEffect {
+    /// Parses a stable effect label.
+    pub const fn from_label(label: &str) -> Option<Self> {
+        match label.as_bytes() {
+            b"allow" => Some(Self::Allow),
+            b"deny" => Some(Self::Deny),
+            b"require_escalation" => Some(Self::RequireEscalation),
+            b"require_audit" => Some(Self::RequireAudit),
+            _ => None,
+        }
+    }
+
     /// Stable effect label.
     pub const fn label(self) -> &'static str {
         match self {
@@ -316,6 +374,21 @@ pub struct PolicyRule<'a> {
 }
 
 impl<'a> PolicyRule<'a> {
+    /// Creates a rule from stable declarative labels.
+    pub fn from_labels(
+        id: u64,
+        label: &'a str,
+        effect: &str,
+        resource_kind: &str,
+        operation: &str,
+    ) -> PolicyResult<Self> {
+        let effect = PolicyEffect::from_label(effect).ok_or(PolicyError::InvalidRule)?;
+        let resource_kind =
+            ResourceKind::from_label(resource_kind).ok_or(PolicyError::InvalidResource)?;
+        let operation = OperationKind::from_label(operation).ok_or(PolicyError::InvalidRule)?;
+        Ok(Self::new(id, label, effect, resource_kind, operation))
+    }
+
     /// Creates a rule with conservative defaults.
     pub const fn new(
         id: u64,

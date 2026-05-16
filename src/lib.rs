@@ -45,6 +45,9 @@ pub const VERSION: &str = "0.1.0";
 /// Public module names exposed by this crate.
 pub const MODULES: &[&str] = &["capability", "rules", "evaluator", "sandbox"];
 
+/// Policy bundle schema version owned by this crate.
+pub const POLICY_SCHEMA_VERSION: &str = "alani.policy.v1";
+
 /// Feature bit for capability taxonomy and attenuation helpers.
 pub const POLICY_FEATURE_CAPABILITIES: u64 = 1 << 0;
 /// Feature bit for declarative policy rules.
@@ -446,6 +449,8 @@ pub struct PolicyCatalog {
     pub repository: &'static str,
     /// Crate version.
     pub version: &'static str,
+    /// Policy bundle schema version.
+    pub schema_version: &'static str,
     /// Feature bitmap.
     pub features: u64,
     /// Known capability bits.
@@ -459,6 +464,7 @@ impl PolicyCatalog {
     pub const CURRENT: Self = Self {
         repository: REPOSITORY,
         version: VERSION,
+        schema_version: POLICY_SCHEMA_VERSION,
         features: POLICY_KNOWN_FEATURES,
         capability_bits: KNOWN_CAPABILITY_BITS,
         max_label_len: MAX_POLICY_LABEL_LEN,
@@ -471,7 +477,7 @@ impl PolicyCatalog {
 
     /// Validates catalog metadata.
     pub const fn validate(self) -> PolicyResult<()> {
-        if self.repository.is_empty() || self.version.is_empty() {
+        if self.repository.is_empty() || self.version.is_empty() || self.schema_version.is_empty() {
             return Err(PolicyError::MissingField);
         }
         if self.features & !POLICY_KNOWN_FEATURES != 0 {

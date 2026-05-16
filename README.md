@@ -15,6 +15,8 @@ Declarative capability, access-control, sandbox, audit, and resource policies se
 cargo fmt -- --check
 cargo test --all-features
 cargo test --no-default-features
+cargo clippy --all-targets --all-features -- -D warnings
+python3 tools/validate_policy_examples.py
 ```
 
 ## Public API Surface
@@ -23,5 +25,7 @@ cargo test --no-default-features
 - `rules`: declarative policy rules, resource and operation vocabularies, default-deny rule selection, and budget limits.
 - `evaluator`: static policy engine contracts, policy decisions, request validation, redaction checks, and audit-facing decision records.
 - `sandbox`: agent/service sandbox profiles, resource-class gates, capability checks, budget checks, and audit-on-violation metadata.
+
+The public policy bundle schema version is `alani.policy.v1`. Checked examples live under `examples/`, and machine-readable bundle metadata lives under `schemas/`.
 
 The crate remains dependency-free while sibling repositories stabilize. Keep public API changes synchronized with `docs/repositories/alani-policy.md`, Doc 15, Doc 16, Doc 42, and Doc 43.

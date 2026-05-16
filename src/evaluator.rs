@@ -26,6 +26,17 @@ pub enum PolicyDecision {
 }
 
 impl PolicyDecision {
+    /// Parses a stable decision label.
+    pub const fn from_label(label: &str) -> Option<Self> {
+        match label.as_bytes() {
+            b"allow" => Some(Self::Allow),
+            b"deny" => Some(Self::Deny),
+            b"require_escalation" => Some(Self::RequireEscalation),
+            b"require_audit" => Some(Self::RequireAudit),
+            _ => None,
+        }
+    }
+
     /// Stable decision label.
     pub const fn label(self) -> &'static str {
         match self {

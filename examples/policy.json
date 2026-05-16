@@ -1,0 +1,50 @@
+{
+  "schema_version": "alani.policy.v1",
+  "bundle": "mvk.host",
+  "generation": 1,
+  "rules": [
+    {
+      "id": 1,
+      "label": "allow_mock_model",
+      "effect": "allow",
+      "principal_kind": "agent",
+      "resource_kind": "model",
+      "resource": "model:mock",
+      "operation": "infer",
+      "required_capabilities": ["cognition.infer"],
+      "max_budget": {
+        "max_compute_units": 100,
+        "max_memory_bytes": 4096,
+        "deadline_ns": 1000
+      },
+      "priority": 10,
+      "audit_required": true,
+      "enabled": true
+    },
+    {
+      "id": 2,
+      "label": "deny_agent_policy_write",
+      "effect": "deny",
+      "principal_kind": "agent",
+      "resource_kind": "policy",
+      "resource": "*",
+      "operation": "write",
+      "required_capabilities": [],
+      "priority": 100,
+      "audit_required": true,
+      "enabled": true
+    }
+  ],
+  "sandbox_profiles": [
+    {
+      "id": 1,
+      "label": "agent_model",
+      "principal_kind": "agent",
+      "allowed_resources": ["model", "trace"],
+      "capabilities": ["cognition.infer", "trace.context"],
+      "require_trace": true,
+      "status": "enforcing",
+      "audit_on_violation": true
+    }
+  ]
+}

@@ -329,6 +329,21 @@ pub enum PrincipalKind {
 }
 
 impl PrincipalKind {
+    /// Parses a stable principal-kind label.
+    pub const fn from_label(label: &str) -> Option<Self> {
+        match label.as_bytes() {
+            b"kernel" => Some(Self::Kernel),
+            b"runtime" => Some(Self::Runtime),
+            b"agent" => Some(Self::Agent),
+            b"operator" => Some(Self::Operator),
+            b"device" => Some(Self::Device),
+            b"service" => Some(Self::Service),
+            b"corpus_contributor" => Some(Self::CorpusContributor),
+            b"anonymous" => Some(Self::Anonymous),
+            _ => None,
+        }
+    }
+
     /// Stable kind label.
     pub const fn label(self) -> &'static str {
         match self {

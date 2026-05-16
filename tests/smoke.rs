@@ -3,7 +3,7 @@ use alani_policy::{
     DataClass, EvaluationContext, OperationKind, PolicyBudget, PolicyDecision, PolicyEffect,
     PolicyEngine, PolicyError, PolicyRequest, PolicyRule, PolicyRuleSet, Principal, PrincipalKind,
     RedactionState, ResourceKind, SandboxOperation, SandboxProfile, SandboxRequest,
-    SandboxResource, SandboxResourceSet, StaticPolicyEngine, TraceContext,
+    SandboxResource, SandboxResourceSet, StaticPolicyEngine, TraceContext, POLICY_SCHEMA_VERSION,
 };
 
 fn kernel() -> Principal<'static> {
@@ -29,7 +29,45 @@ fn repository_identity_and_catalog_are_stable() {
         &["capability", "rules", "evaluator", "sandbox"]
     );
     assert_eq!(policy_catalog().validate(), Ok(()));
+    assert_eq!(policy_catalog().schema_version, POLICY_SCHEMA_VERSION);
     assert!(policy_catalog().features & alani_policy::POLICY_FEATURE_SANDBOX != 0);
+}
+
+#[test]
+fn declarative_labels_map_to_public_policy_types() {
+    assert_eq!(
+        PrincipalKind::from_label("agent"),
+        Some(PrincipalKind::Agent)
+    );
+    assert_eq!(ResourceKind::from_label("model"), Some(ResourceKind::Model));
+    assert_eq!(
+        OperationKind::from_label("infer"),
+        Some(OperationKind::Infer)
+    );
+    assert_eq!(PolicyEffect::from_label("allow"), Some(PolicyEffect::Allow));
+    assert_eq!(
+        PolicyDecision::from_label("deny"),
+        Some(PolicyDecision::Deny)
+    );
+    assert_eq!(
+        CapabilitySet::named("cognition.infer"),
+        Some(CapabilitySet::single(Capability::CognitionInfer))
+    );
+
+    let rule = PolicyRule::from_labels(42, "allow_from_labels", "allow", "model", "infer")
+        .unwrap()
+        .for_principal_kind(PrincipalKind::Agent);
+    assert_eq!(rule.effect, PolicyEffect::Allow);
+    assert!(rule.matches(
+        agent(),
+        ResourceKind::Model,
+        "model:any",
+        OperationKind::Infer
+    ));
+    assert_eq!(
+        PolicyRule::from_labels(43, "bad_rule", "permit", "model", "infer").unwrap_err(),
+        PolicyError::InvalidRule
+    );
 }
 
 #[test]
