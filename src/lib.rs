@@ -86,8 +86,12 @@ pub type PolicyResult<T> = Result<T, PolicyError>;
 pub enum PolicyError {
     /// A required field was empty or omitted.
     MissingField,
+    /// A version or schema identifier was not supported.
+    InvalidVersion,
     /// A bounded string field exceeded its documented limit.
     FieldTooLong,
+    /// A policy-facing label contained unsupported characters.
+    InvalidLabel,
     /// Reserved feature, capability, rule, or sandbox bits were supplied.
     ReservedBits,
     /// Capability metadata failed validation.
@@ -131,7 +135,9 @@ impl PolicyError {
     pub const fn reason(self) -> &'static str {
         match self {
             Self::MissingField => "missing_field",
+            Self::InvalidVersion => "invalid_version",
             Self::FieldTooLong => "field_too_long",
+            Self::InvalidLabel => "invalid_label",
             Self::ReservedBits => "reserved_bits",
             Self::InvalidCapability => "invalid_capability",
             Self::MissingCapability => "missing_capability",
@@ -158,6 +164,8 @@ impl PolicyError {
         matches!(
             self,
             Self::ReservedBits
+                | Self::InvalidVersion
+                | Self::InvalidLabel
                 | Self::InvalidCapability
                 | Self::MissingCapability
                 | Self::InvalidPrincipal
@@ -359,7 +367,31 @@ pub const fn validate_policy_label(label: &str, max_len: usize) -> PolicyResult<
     if label.len() > max_len {
         return Err(PolicyError::FieldTooLong);
     }
+    let bytes = label.as_bytes();
+    let mut index = 0;
+    while index < bytes.len() {
+        if !is_policy_label_byte(bytes[index]) {
+            return Err(PolicyError::InvalidLabel);
+        }
+        index += 1;
+    }
     Ok(())
+}
+
+const fn is_policy_label_byte(byte: u8) -> bool {
+    matches!(
+        byte,
+        b'A'..=b'Z'
+            | b'a'..=b'z'
+            | b'0'..=b'9'
+            | b':'
+            | b'_'
+            | b'*'
+            | b'.'
+            | b'-'
+            | b'/'
+            | b'@'
+    )
 }
 
 /// Resource budget supplied to policy and sandbox checks.
@@ -499,4 +531,129 @@ pub const POLICY_CATALOG: PolicyCatalog = PolicyCatalog::CURRENT;
 /// Returns the current policy catalog.
 pub const fn policy_catalog() -> PolicyCatalog {
     PolicyCatalog::CURRENT
+}
+
+/// Borrowed policy bundle matching the `alani.policy.v1` JSON schema shape.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PolicyBundle<'a> {
+    /// Policy bundle schema version.
+    pub schema_version: &'a str,
+    /// Stable bundle label.
+    pub bundle: &'a str,
+    /// Monotonic bundle generation. Zero is invalid.
+    pub generation: u64,
+    /// Declarative policy rules.
+    pub rules: &'a [rules::PolicyRule<'a>],
+    /// Sandbox profiles included in the bundle.
+    pub sandbox_profiles: &'a [sandbox::SandboxProfile<'a>],
+}
+
+impl<'a> PolicyBundle<'a> {
+    /// Creates a policy bundle using the current schema version.
+    pub const fn new(
+        bundle: &'a str,
+        generation: u64,
+        rules: &'a [rules::PolicyRule<'a>],
+        sandbox_profiles: &'a [sandbox::SandboxProfile<'a>],
+    ) -> Self {
+        Self {
+            schema_version: POLICY_SCHEMA_VERSION,
+            bundle,
+            generation,
+            rules,
+            sandbox_profiles,
+        }
+    }
+
+    /// Overrides the schema version for compatibility tests.
+    pub const fn with_schema_version(mut self, schema_version: &'a str) -> Self {
+        self.schema_version = schema_version;
+        self
+    }
+
+    /// Returns a compact summary for release evidence or diagnostics.
+    pub fn summary(self) -> PolicyBundleSummary<'a> {
+        PolicyBundleSummary {
+            schema_version: self.schema_version,
+            bundle: self.bundle,
+            generation: self.generation,
+            rule_count: self.rules.len(),
+            sandbox_profile_count: self.sandbox_profiles.len(),
+            features: POLICY_KNOWN_FEATURES,
+        }
+    }
+
+    /// Validates schema identity, bundle metadata, rules, profiles, and duplicate ids.
+    pub fn validate(self) -> PolicyResult<()> {
+        if self.schema_version.as_bytes() != POLICY_SCHEMA_VERSION.as_bytes() {
+            return Err(PolicyError::InvalidVersion);
+        }
+        validate_policy_label(self.bundle, MAX_POLICY_LABEL_LEN)?;
+        if self.generation == 0 || self.rules.is_empty() {
+            return Err(PolicyError::MissingField);
+        }
+
+        let mut rule_index = 0;
+        while rule_index < self.rules.len() {
+            let rule = self.rules[rule_index];
+            rule.validate()?;
+            let mut previous = 0;
+            while previous < rule_index {
+                if self.rules[previous].id == rule.id {
+                    return Err(PolicyError::Duplicate);
+                }
+                previous += 1;
+            }
+            rule_index += 1;
+        }
+
+        let mut profile_index = 0;
+        while profile_index < self.sandbox_profiles.len() {
+            let profile = self.sandbox_profiles[profile_index];
+            profile.validate()?;
+            let mut previous = 0;
+            while previous < profile_index {
+                if self.sandbox_profiles[previous].id == profile.id {
+                    return Err(PolicyError::Duplicate);
+                }
+                previous += 1;
+            }
+            profile_index += 1;
+        }
+
+        Ok(())
+    }
+}
+
+/// Compact policy bundle metadata for diagnostics and release evidence.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PolicyBundleSummary<'a> {
+    /// Policy bundle schema version.
+    pub schema_version: &'a str,
+    /// Stable bundle label.
+    pub bundle: &'a str,
+    /// Monotonic bundle generation.
+    pub generation: u64,
+    /// Number of policy rules.
+    pub rule_count: usize,
+    /// Number of sandbox profiles.
+    pub sandbox_profile_count: usize,
+    /// Policy feature bitmap.
+    pub features: u64,
+}
+
+impl<'a> PolicyBundleSummary<'a> {
+    /// Validates summary metadata.
+    pub fn validate(self) -> PolicyResult<()> {
+        if self.schema_version.as_bytes() != POLICY_SCHEMA_VERSION.as_bytes() {
+            return Err(PolicyError::InvalidVersion);
+        }
+        if self.generation == 0 || self.rule_count == 0 {
+            return Err(PolicyError::MissingField);
+        }
+        if self.features & !POLICY_KNOWN_FEATURES != 0 {
+            return Err(PolicyError::ReservedBits);
+        }
+        Ok(())
+    }
 }

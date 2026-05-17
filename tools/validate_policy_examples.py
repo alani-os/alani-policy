@@ -13,7 +13,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = ROOT / "schemas" / "policy-bundle.schema.json"
 EXAMPLE_DIR = ROOT / "examples"
-LABEL_RE = re.compile(r"^[A-Za-z0-9:_*.\-/@]+$")
+LABEL_RE = re.compile(r"^[A-Za-z0-9:_*.\-/@_]+$")
 MAX_LABEL_LEN = 128
 
 

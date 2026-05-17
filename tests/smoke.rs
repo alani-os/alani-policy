@@ -1,8 +1,8 @@
 use alani_policy::{
     policy_catalog, Capability, CapabilityGrant, CapabilityScope, CapabilitySet, CapabilityTable,
-    DataClass, EvaluationContext, OperationKind, PolicyBudget, PolicyDecision, PolicyEffect,
-    PolicyEngine, PolicyError, PolicyRequest, PolicyRule, PolicyRuleSet, Principal, PrincipalKind,
-    RedactionState, ResourceKind, SandboxOperation, SandboxProfile, SandboxRequest,
+    DataClass, EvaluationContext, OperationKind, PolicyBudget, PolicyBundle, PolicyDecision,
+    PolicyEffect, PolicyEngine, PolicyError, PolicyRequest, PolicyRule, PolicyRuleSet, Principal,
+    PrincipalKind, RedactionState, ResourceKind, SandboxOperation, SandboxProfile, SandboxRequest,
     SandboxResource, SandboxResourceSet, StaticPolicyEngine, TraceContext, POLICY_SCHEMA_VERSION,
 };
 
@@ -67,6 +67,49 @@ fn declarative_labels_map_to_public_policy_types() {
     assert_eq!(
         PolicyRule::from_labels(43, "bad_rule", "permit", "model", "infer").unwrap_err(),
         PolicyError::InvalidRule
+    );
+    assert_eq!(
+        alani_policy::validate_policy_label("bad label", 128),
+        Err(PolicyError::InvalidLabel)
+    );
+}
+
+#[test]
+fn policy_bundle_contract_validates_schema_rules_and_profiles() {
+    let rules = [PolicyRule::new(
+        1,
+        "allow_mock_model",
+        PolicyEffect::Allow,
+        ResourceKind::Model,
+        OperationKind::Infer,
+    )
+    .for_principal_kind(PrincipalKind::Agent)
+    .for_resource("model:mock")];
+    let profiles = [SandboxProfile::new(
+        1,
+        "agent_model",
+        PrincipalKind::Agent,
+        SandboxResourceSet::single(SandboxResource::Model),
+        CapabilitySet::single(Capability::CognitionInfer),
+    )];
+
+    let bundle = PolicyBundle::new("mvk.host", 1, &rules, &profiles);
+    assert_eq!(bundle.validate(), Ok(()));
+    let summary = bundle.summary();
+    assert_eq!(summary.schema_version, POLICY_SCHEMA_VERSION);
+    assert_eq!(summary.rule_count, 1);
+    assert_eq!(summary.sandbox_profile_count, 1);
+    assert_eq!(summary.validate(), Ok(()));
+
+    assert_eq!(
+        bundle.with_schema_version("alani.policy.v0").validate(),
+        Err(PolicyError::InvalidVersion)
+    );
+
+    let duplicate_rules = [rules[0], rules[0].for_resource("model:other")];
+    assert_eq!(
+        PolicyBundle::new("mvk.host", 1, &duplicate_rules, &[]).validate(),
+        Err(PolicyError::Duplicate)
     );
 }
 
